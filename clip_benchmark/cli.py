@@ -179,6 +179,10 @@ def main_eval(base):
         random.shuffle(runs)
         runs = [r for i, r in enumerate(runs) if i % world_size == rank]
     for (model, pretrained), (dataset), (language) in runs:
+        # Skip some datasets
+        if any([name in dataset for name in ["diabetic_retinopathy", "oxford_iiit_pet", "pets", "resisc45", "sun397"]]):
+            print("Skipping", dataset)
+            continue
         # We iterative over all possible model/dataset/languages
         args = copy(base)
         args.model = model
@@ -231,6 +235,7 @@ def run(args):
     pretrained_slug = os.path.basename(args.pretrained) if os.path.isfile(args.pretrained) else args.pretrained
     pretrained_slug_full_path = args.pretrained.replace('/', '_') if os.path.isfile(args.pretrained) else args.pretrained
     dataset_slug = dataset_name.replace('/', '_')
+    os.makedirs(os.path.dirname(args.output), exist_ok=True)
     output = args.output.format(
         model=args.model, 
         pretrained=pretrained_slug,
