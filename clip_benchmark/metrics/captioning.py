@@ -1,4 +1,6 @@
 import json
+import sys
+sys.path.insert(0, "/weka/prior-default/georges/research/open_clip/src/")
 from open_clip import tokenize
 from tqdm.auto import tqdm
 from open_clip.tokenizer import _tokenizer

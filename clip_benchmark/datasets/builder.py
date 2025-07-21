@@ -314,10 +314,12 @@ def build_dataset(dataset_name, root="root", transform=None, split="test", downl
 
         ds = flickr30k_200.Flickr30k_200(root=root, ann_file=annotation_file, transform=transform, **kwargs)
     elif dataset_name == "flickr30k":
+        # import pdb; pdb.set_trace()
         # downloadable from https://www.kaggle.com/datasets/adityajn105/flickr30k
         # https://github.com/mehdidc/retrieval_annotations/releases/tag/1.0.0(annotations)
         # `kaggle datasets download -d adityajn105/flickr30k`
         assert split in ("train", "val", "test"), f"Only `train` and `val` and `test` split available for {dataset_name}"
+        root = os.path.join(root, "flickr30k")
         if not os.path.exists(root):
             # Automatic download
             print("Downloading flickr30k...")

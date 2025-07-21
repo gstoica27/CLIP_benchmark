@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional as F
 from tqdm import tqdm
 
-def evaluate(model, dataloader, tokenizer,  device, amp=True, recall_k_list=[5]):
+def evaluate(model, dataloader, tokenizer,  device, amp=True, recall_k_list=[1, 5]):
     """
     Evaluate the model on the given dataset
 
