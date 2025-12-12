@@ -255,14 +255,68 @@ def run(args):
     if args.skip_load:
         model, transform, collate_fn, dataloader = None, None, None, None
     else:
+        import yaml
+        import sys
+        import numpy as np
+        sys.path.append("/weka/prior-default/georges/research/open_clip/src")
+        from open_clip import drop_in_replacements, create_model_and_transforms, get_tokenizer
+        # from open_clip_train import create_model_and_transforms
         # pdb.set_trace()
-        model, transform, tokenizer = load_clip(
-            model_type=args.model_type,
-            model_name=args.model,
-            pretrained=args.pretrained,
-            cache_dir=args.model_cache_dir,
-            device=args.device
+        # model, transform, tokenizer = load_clip(
+        #     model_type=args.model_type,
+        #     model_name=args.model,
+        #     # pretrained=args.pretrained,
+        #     pretrained="webli",
+        #     cache_dir=args.model_cache_dir,
+        #     device=args.device
+        # )
+        # pdb.set_trace()
+        params_file = os.path.join(os.path.dirname(os.path.dirname(args.pretrained)), "params.txt")
+        with open(params_file, "r") as f:
+            text = f.read().replace("\t", "    ")
+            model_params = yaml.safe_load(text)
+        
+        model_kwargs = {}
+        if model_params['siglip']:
+            model_kwargs['init_logit_scale'] = np.log(10)  # different from CLIP
+            model_kwargs['init_logit_bias'] = -10
+        # pdb.set_trace()
+        model, _, transform = create_model_and_transforms(
+            model_params['model'],
+            model_params['pretrained'],
+            precision=model_params["precision"],
+            device=model_params['device'],
+            jit=model_params['torchscript'],
+            force_quick_gelu=model_params['force_quick_gelu'],
+            force_custom_text=model_params['force_custom_text'],
+            force_patch_dropout=eval(model_params['force_patch_dropout']),
+            force_image_size=eval(model_params['force_image_size']),
+            image_mean=eval(model_params['image_mean']),
+            image_std=eval(model_params['image_std']),
+            image_interpolation=eval(model_params['image_interpolation']),
+            image_resize_mode=eval(model_params['image_resize_mode']),  # only effective for inference
+            aug_cfg=model_params['aug_cfg'],
+            pretrained_image=model_params['pretrained_image'],
+            output_dict=True,
+            cache_dir=eval(model_params['cache_dir']),
+            **model_kwargs,
         )
+        # pdb.set_trace()
+        tokenizer = get_tokenizer(model_params['model'], cache_dir=model_params['cache_dir'])
+
+        instructions = {
+                "apply_rope": True,
+                "del_pos_emb": True,
+                "add_patch_mask": False,
+                "apply_region_caption_loss": False,
+                "region_caption_strategy": "patches"
+            }
+        print("With the instructions, ", instructions)
+        drop_in_replacements.replace_forward_functions(model, instructions=instructions)
+        # pdb.set_trace()
+        sd = torch.load(args.pretrained, map_location="cpu")['state_dict']
+        sd = {k.replace('module.', ''): v for k, v in sd.items()}
+        model.load_state_dict(sd, strict=True)
         model.eval()
         # pdb.set_trace()
         if args.model.count("nllb-clip") > 0:
@@ -332,7 +386,8 @@ def run(args):
             tokenizer, 
             recall_k_list=args.recall_k,
             device=args.device, 
-            amp=args.amp
+            amp=args.amp,
+            model_params=model_params
         )
     elif task == "image_caption_selection":
         metrics = image_caption_selection.evaluate(

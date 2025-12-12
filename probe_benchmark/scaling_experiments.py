@@ -1,5 +1,5 @@
 import os
-from clip_benchmark.cli import run, get_parser_args
+from CLIP_benchmark.clip_benchmark.cli_rope import run, get_parser_args
 
 if __name__ == '__main__':
 

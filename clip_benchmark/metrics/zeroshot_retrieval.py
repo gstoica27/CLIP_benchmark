@@ -1,3 +1,4 @@
+import pdb
 import logging
 from contextlib import suppress
 
@@ -5,7 +6,23 @@ import torch
 import torch.nn.functional as F
 from tqdm import tqdm
 
-def evaluate(model, dataloader, tokenizer,  device, amp=True, recall_k_list=[1, 5]):
+
+import torch
+from contextlib import suppress
+from functools import partial
+
+
+def get_autocast(precision, device_type='cuda'):
+    if precision =='amp':
+        amp_dtype = torch.float16
+    elif precision == 'amp_bfloat16' or precision == 'amp_bf16':
+        amp_dtype = torch.bfloat16
+    else:
+        return suppress
+
+    return partial(torch.amp.autocast, device_type=device_type, dtype=amp_dtype)
+
+def evaluate(model, dataloader, tokenizer,  device, amp=True, recall_k_list=[1, 5], model_params=None):
     """
     Evaluate the model on the given dataset
 
@@ -48,9 +65,19 @@ def evaluate(model, dataloader, tokenizer,  device, amp=True, recall_k_list=[1, 
         batch_texts_image_index = [ind for ind, texts in zip(inds, batch_texts) for text in texts]
 
         # compute the embedding of images and texts
-        with torch.no_grad(), torch.autocast(device, enabled=amp):
-            batch_images_emb = F.normalize(model.encode_image(batch_images), dim=-1)
-            batch_texts_emb = F.normalize(model.encode_text(batch_texts_tok), dim=-1)
+        if model_params is not None:
+            # pdb.set_trace()
+            autocast = get_autocast(model_params['precision'], device_type=device)
+            with torch.no_grad(), autocast():
+                # pdb.set_trace()
+                batch_images_emb = F.normalize(model.encode_image(batch_images, apply_rope=True)['x'], dim=-1)
+                batch_texts_emb = F.normalize(model.encode_text(batch_texts_tok), dim=-1)
+        else:
+            with torch.no_grad(), torch.autocast(device, enabled=amp):
+                # pdb.set_trace()
+                batch_images_emb = F.normalize(model.encode_image(batch_images, apply_rope=True)['x'], dim=-1)
+                # batch_images_emb = F.normalize(model.encode_image(batch_images), dim=-1)
+                batch_texts_emb = F.normalize(model.encode_text(batch_texts_tok), dim=-1)
 
         batch_images_emb_list.append(batch_images_emb.cpu())
         batch_texts_emb_list.append(batch_texts_emb.cpu())

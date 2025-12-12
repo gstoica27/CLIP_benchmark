@@ -3,7 +3,7 @@
 """Tests for `clip_benchmark` package."""
 
 import os
-from clip_benchmark.cli import run
+from CLIP_benchmark.clip_benchmark.cli_rope import run
 import logging
 import torch
 
