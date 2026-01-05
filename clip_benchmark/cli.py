@@ -68,6 +68,28 @@ def get_parser_args():
     parser_eval.add_argument('--model_type', default="open_clip", type=str, choices=MODEL_TYPES, help="clip model type")
     parser_eval.add_argument('--wds_cache_dir', default=None, type=str, help="optional cache directory for webdataset only")
     parser_eval.add_argument('--is-fsdp', action="store_true", help="whether the model is trained with FSDP.")
+    parser.add_argument(
+        "--use-rope",
+        action="store_true",
+        help="Use RoPE attention instead of regular attention.",
+    )
+    parser.add_argument(
+        "--delete-pos-emb",
+        action="store_true",
+        help="Delete positional embedding when applying RoPE."
+    )
+    parser.add_argument(
+        '--image-mean', type=float, nargs='+', default=None, metavar='MEAN',
+        help='Override default image mean value of dataset')
+    parser.add_argument(
+        '--image-std', type=float, nargs='+', default=None, metavar='STD',
+        help='Override default image std deviation of of dataset'
+    )
+    parser.add_argument(
+        '--image-interpolation',
+        default=None, type=str, choices=['bicubic', 'bilinear', 'random'],
+        help="Override default image resize interpolation"
+    )
     parser_eval.set_defaults(which='eval')
 
     parser_build = subparsers.add_parser('build', help='Build CSV from evaluations')
@@ -264,9 +286,14 @@ def run(args):
             cache_dir=args.model_cache_dir,
             device=args.device,
             is_fsdp=args.is_fsdp,
+            use_rope=args.use_rope,
+            del_pos_emb=args.delete_pos_emb,
+            image_mean=args.image_mean,
+            image_std=args.image_std,
+            image_interpolation=args.image_interpolation,
         )
         model.eval()
-        # pdb.set_trace()
+        pdb.set_trace()
         if args.model.count("nllb-clip") > 0:
             # for NLLB-CLIP models, we need to set the language prior to running the tests
             from clip_benchmark.models.nllb_clip import set_language

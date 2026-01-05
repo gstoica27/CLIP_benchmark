@@ -10,15 +10,15 @@ model_architecture="ViT-B-16-SigLIP"
 # pretrained_dir="/weka/oe-training-default/georges/checkpoints/ViT_B_16/DataComp15M/logs/model_ViT-B-16-SigLIP-lr_0.001-wd_0.0001-opt_adamw-w_20000-b1_0.9-b2_0.95-gc_1.0-bs_128-j_1-p_amp-targ_original/checkpoints" # original model
 # pretrained_dir="/weka/oe-training-default/georges/checkpoints/ViT_SO400M_14/DataComp15M/logs/original_captions/model_ViT-SO400M-14-SigLIP-lr_0.001-b_128-j_1-p_amp-target_dense_multipos-NumSent_2/checkpoints" # our model
 # pretrained_dir="/weka/oe-training-default/georges/checkpoints/ViT_SO400M_14/DataComp15M/logs/original_captions/model_ViT-SO400M-14-SigLIP-lr_0.001-b_128-j_1-p_amp/checkpoints" # original model
-benchmark_datasets_root="/weka/oe-data-default/georges/datasets/clip_benchmark"
+benchmark_datasets_root="/weka/oe-training-default/georges/datasets/clip_benchmark"
 task="zeroshot_retrieval"
 # dataset=mscoco_captions
 # dataset=flickr30k
 # output_pattern="/weka/prior-default/georges/research/open_clip/CLIP_benchmark/clip_benchmark/vitl14_datacomp15m/${experiment_name}/{dataset}_{pretrained}_{model}_{language}_{task}.json"
 # output_pattern="/weka/prior-default/georges/research/open_clip/CLIP_benchmark/clip_benchmark/vitb16_datacomp15m/${experiment_name}/{dataset}_{pretrained}_{model}_{language}_{task}.json"
 
-MAX_EPOCHS=128
-MIN_EPOCHS=128
+MAX_EPOCHS=10
+MIN_EPOCHS=10
 # MAX_EPOCHS=5
 # MIN_EPOCHS=5
 # MAX_EPOCHS=55
@@ -41,7 +41,8 @@ MODELS_TO_RUN=(
     # Training for 781K steps
     # "/weka/oe-training-default/georges/checkpoints/ViT_B_16/v0DataMixture_MetaclipBased/logs/v0-exp3model_ViT-B-16-SigLIP-lr_0.005-wd_0.01-w_20K-b1_0.9-b2_0.95-p_amp_bf16-l_1.0-ms_781K-rope_delpos-ijepa_head_l_1.0/checkpoints"
     # "metaclip_400m"
-    "SigLIP_B16"
+    # "SigLIP_B16"
+    "/weka/oe-training-default/georges/checkpoints/ViT_B_16/ablations/DataComp50M_MetaclipBased/logs/50M_Abl_lr_0.001-wd_0.01-w_20K-b1_0.9-b2_0.95-p_amp_bf16-l_1.0-pmpr_br_0.0625_tr_0.4_l_0.1-ms_123K-rope_dp-dino_c_5_l_0.5/checkpoints"
 )
 EXPERIMENT_NAMES=(
      # Training for 30.5K steps | Constant Warmup
@@ -63,7 +64,8 @@ EXPERIMENT_NAMES=(
     # Training for 781K steps
     # "vitb16_datacomp100m_lr0p005_wd0p01_warmup20K_ms781K_RoPE_DelPosEmb"
     # "vit_b16_metaclip400m"
-    "hf-hub:timm/ViT-B-16-SigLIP"
+    # "hf-hub:timm/ViT-B-16-SigLIP"
+    "50M_Abl_lr_0.001-wd_0.01-w_20K-b1_0.9-b2_0.95-p_amp_bf16-l_1.0-pmpr_br_0.0625_tr_0.4_l_0.1-ms_123K-rope_dp-dino_c_5_l_0.5"
 
 )
 
@@ -78,9 +80,11 @@ for i in "${!MODELS_TO_RUN[@]}"; do
     for dataset in "mscoco_captions flickr30k"; do
         # output_pattern="/weka/prior-default/georges/research/open_clip/CLIP_benchmark/clip_benchmark/vitb16_datacomp100m/${experiment_name}/{dataset}_{pretrained}_{model}_{language}_{task}.json"
         # output_pattern="/weka/prior-default/georges/research/open_clip/CLIP_benchmark/clip_benchmark/vitb16_datacomp100m_v0/${experiment_name}/{dataset}_{pretrained}_{model}_{language}_{task}.json"
-        output_pattern="/weka/prior-default/georges/research/open_clip/CLIP_benchmark/clip_benchmark/siglip/${experiment_name}/{dataset}_{pretrained}_{model}_{language}_{task}.json"
+        # output_pattern="/weka/prior-default/georges/research/open_clip/CLIP_benchmark/clip_benchmark/siglip/${experiment_name}/{dataset}_{pretrained}_{model}_{language}_{task}.json"
+        output_pattern="/weka/prior-default/georges/research/open_clip/CLIP_benchmark/clip_benchmark/vitb16_datacomp50m/${experiment_name}/{dataset}_{model}_{language}_{task}.json"
         for epoch in $(seq $MAX_EPOCHS -1 $MIN_EPOCHS); do
-            pretrained_path="${pretrained_dir}/epoch_${epoch}.pt"
+            # pretrained_path="${pretrained_dir}/epoch_${epoch}.pt"
+            pretrained_path="${pretrained_dir}/epoch_${epoch}"
             # pretrained_path="${pretrained_dir}"
             CUDA_VISIBLE_DEVICES=1 python -m clip_benchmark.cli_rope eval \
                 --model_type $model_source \
@@ -92,7 +96,8 @@ for i in "${!MODELS_TO_RUN[@]}"; do
                 --output $output_pattern \
                 --batch_size 64 \
                 --language "en" \
-                --recall_k 1 5
+                --recall_k 1 5 \
+                --is-fsdp
         done
     done
 done

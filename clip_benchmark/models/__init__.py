@@ -17,8 +17,19 @@ def load_clip(
         pretrained: str,
         cache_dir: str,
         device: Union[str, torch.device] = "cuda",
-        is_fsdp: bool = False
+        is_fsdp: bool = False,
+        use_rope: bool = False,
+        del_pos_emb: bool = False,
+        image_mean: list = None,
+        image_std: list = None,
+        image_interpolation: str = None,
 ):
     assert model_type in MODEL_TYPES, f"model_type={model_type} is invalid!"
     load_func = TYPE2FUNC[model_type]
-    return load_func(model_name=model_name, pretrained=pretrained, cache_dir=cache_dir, device=device, is_fsdp=is_fsdp)
+    return load_func(
+        model_name=model_name, pretrained=pretrained, 
+        cache_dir=cache_dir, device=device, is_fsdp=is_fsdp,
+        use_rope=use_rope, del_pos_emb=del_pos_emb,
+        image_mean=image_mean, image_std=image_std,
+        image_interpolation=image_interpolation,
+    )

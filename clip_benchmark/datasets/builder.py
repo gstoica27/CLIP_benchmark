@@ -604,6 +604,7 @@ def build_vtab_dataset(dataset_name, transform, download=True, split="test", dat
             call(f"kaggle competitions download -c diabetic-retinopathy-detection -p {data_dir}/downloads/manual", shell=True)
             call(f"cd {data_dir}/downloads/manual;unzip diabetic-retinopathy-detection.zip;cat train.zip*>train.zip;cat test.zip*>test.zip;unzip train.zip; unzip test.zip;unzip sample.zip;unzip trainLabels.csv.zip", shell=True)
         from task_adaptation.data.diabetic_retinopathy import RetinopathyData
+        # import pdb; pdb.set_trace()
         tfds_dataset = RetinopathyData(config="btgraham-300", data_dir=data_dir)
         classes = classnames["diabetic_retinopathy"]
     elif dataset_name == "dmlab":

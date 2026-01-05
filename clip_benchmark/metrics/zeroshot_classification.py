@@ -111,6 +111,9 @@ def run_classification(model, classifier, dataloader, device, amp=True):
             with torch.autocast(device, enabled=amp):
                 # predict
                 image_features = model.encode_image(images)
+                if isinstance(image_features, dict) and 'x' in image_features:
+                    image_features = image_features['x']
+                # import pdb; pdb.set_trace()
                 image_features = F.normalize(image_features, dim=-1)
                 logits = 100. * image_features @ classifier
             

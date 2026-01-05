@@ -21,6 +21,9 @@ from clip_benchmark.metrics import (captioning, image_caption_selection,
 from clip_benchmark.model_collection import (get_model_collection_from_file,
                                              model_collection)
 from clip_benchmark.models import MODEL_TYPES, load_clip
+import torch.distributed.checkpoint as dist_cp
+import torch.distributed.checkpoint.state_dict as dist_cp_sd
+from torch.distributed.checkpoint.default_planner import DefaultLoadPlanner
 
 
 def get_parser_args():
@@ -68,6 +71,7 @@ def get_parser_args():
     parser_eval.add_argument('--model_type', default="open_clip", type=str, choices=MODEL_TYPES, help="clip model type")
     parser_eval.add_argument('--wds_cache_dir', default=None, type=str, help="optional cache directory for webdataset only")
     parser_eval.set_defaults(which='eval')
+    parser_eval.add_argument("--is-fsdp", action="store_true", help="Use RoPE attention instead of regular attention.")
 
     parser_build = subparsers.add_parser('build', help='Build CSV from evaluations')
     parser_build.add_argument('files', type=str,  nargs="+", help="path(s) of JSON result files")
@@ -181,9 +185,10 @@ def main_eval(base):
         runs = [r for i, r in enumerate(runs) if i % world_size == rank]
     for (model, pretrained), (dataset), (language) in runs:
         # Skip some datasets
-        if any([name in dataset for name in ["diabetic_retinopathy", "oxford_iiit_pet", "pets", "resisc45", "sun397"]]):
-            print("Skipping", dataset)
-            continue
+        # if any([name in dataset for name in ["diabetic_retinopathy", "oxford_iiit_pet", "pets", "resisc45", "sun397"]]):
+        # if any([name in dataset for name in ["diabetic_retinopathy"]]):
+        #     print("Skipping", dataset)
+        #     continue
         # We iterative over all possible model/dataset/languages
         args = copy(base)
         args.model = model
@@ -233,22 +238,24 @@ def run(args):
         dataset_name = args.dataset
     if task == "auto":
         task = get_dataset_default_task(dataset_name)
-    pretrained_slug = os.path.basename(args.pretrained) if os.path.isfile(args.pretrained) else args.pretrained
-    pretrained_slug_full_path = args.pretrained.replace('/', '_') if os.path.isfile(args.pretrained) else args.pretrained
+    # pretrained_slug = os.path.basename(args.pretrained) if os.path.isfile(args.pretrained) else args.pretrained
+    # pretrained_slug_full_path = args.pretrained.replace('/', '_') if os.path.isfile(args.pretrained) else args.pretrained
     dataset_slug = dataset_name.replace('/', '_')
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
     output = args.output.format(
         model=args.model, 
-        pretrained=pretrained_slug,
-        pretrained_full_path=pretrained_slug_full_path,
+        # pretrained=pretrained_slug,
+        # pretrained_full_path=pretrained_slug_full_path,
         task=task, 
         dataset=dataset_slug,
         language=args.language
     )
+    # import pdb; pdb.set_trace()
     if os.path.exists(output) and args.skip_existing:
         if args.verbose:
             print(f"Skip {output}, exists already.")
         return
+    os.makedirs(os.path.dirname(output), exist_ok=True)
     if args.verbose:
         print(f"Running '{task}' on '{dataset_name}' with the model '{args.pretrained}' on language '{args.language}'")
     dataset_root = args.dataset_root.format(dataset=dataset_name, dataset_cleaned=dataset_name.replace("/", "-"))
@@ -283,7 +290,8 @@ def run(args):
         # pdb.set_trace()
         model, _, transform = create_model_and_transforms(
             model_params['model'],
-            model_params['pretrained'],
+            # model_params['pretrained'],
+            pretrained='',
             precision=model_params["precision"],
             device=model_params['device'],
             jit=model_params['torchscript'],
@@ -314,9 +322,31 @@ def run(args):
         print("With the instructions, ", instructions)
         drop_in_replacements.replace_forward_functions(model, instructions=instructions)
         # pdb.set_trace()
-        sd = torch.load(args.pretrained, map_location="cpu")['state_dict']
-        sd = {k.replace('module.', ''): v for k, v in sd.items()}
-        model.load_state_dict(sd, strict=True)
+        if not args.is_fsdp:
+            sd = torch.load(args.pretrained, map_location="cpu")['state_dict']
+            sd = {k.replace('module.', ''): v for k, v in sd.items()}
+            model.load_state_dict(sd, strict=True)
+        else:
+            # from copy import deepcopy
+            # sd = deepcopy(model.state_dict())
+            sd_options = dist_cp_sd.StateDictOptions(full_state_dict=False, cpu_offload=False)
+            model_path = os.path.join(args.pretrained, "model")
+            model_state = {'model': dist_cp_sd.get_model_state_dict(model, options=sd_options)}
+            dist_cp.state_dict_loader.load(
+                model_state,
+                storage_reader=dist_cp.FileSystemReader(model_path),
+                # planner=DefaultLoadPlanner(),
+            )
+            # X = set([k for k, v in sd.items() if torch.allclose(v, model_state['model'][k])])
+            # pdb.set_trace()
+            model.load_state_dict(model_state['model'], strict=True)
+            # dist_cp_sd.set_model_state_dict(
+            #     model, model_state['model'],
+            #     options=dist_cp_sd.StateDictOptions(strict=True)
+            # )
+
+            # sd = dist_cp_sd.get_model_state_dict(model_path, options=sd_options)
+            # model.load_state_dict(sd)
         model.eval()
         # pdb.set_trace()
         if args.model.count("nllb-clip") > 0:
@@ -479,6 +509,7 @@ def run(args):
         dump["templates"] = dataset.templates
     if args.verbose:
         print(f"Dump results to: {output}")
+    # import pdb; pdb.set_trace()
     with open(output, "w") as f:
         json.dump(dump, f)
     return 0
