@@ -34,7 +34,12 @@ MODELS_TO_RUN=(
     # "/weka/oe-training-default/georges/checkpoints/ViT_B_16/DataComp100M_MetaclipBased/logs/100M-16K3model_ViT-B-16-SigLIP-lr_0.005-wd_0.01-opt_adamw-w_20000-b1_0.9-b2_0.95-gc_1.0-bs_256-j_1-p_amp-dense_og_disj-ns_5/checkpoints"
     # "/weka/oe-training-default/georges/checkpoints/ViT_B_16/DataComp100M_MetaclipBased/logs/100M-16K3model_ViT-B-16-SigLIP-lr_0.001-wd_0.0001-opt_adamw-w_20000-b1_0.9-b2_0.95-gc_1.0-bs_256-j_1-p_amp-dense_og_disj-ns_5/checkpoints"
     # "/weka/oe-training-default/georges/checkpoints/ViT_B_16/DataComp100M_MetaclipBased/logs/100M-16K3model_ViT-B-16-SigLIP-lr_0.005-wd_0.0001-opt_adamw-w_20K-b1_0.9-b2_0.95-gc_1.0-j_1-p_amp-pm_br_0.0625_tr_0.4-ms_31K/checkpoints"
-    "/weka/oe-training-default/georges/checkpoints/ViT_B_16/ablations/DataComp50M_MetaclipBased/logs/50M_Abl_lr_0.001-wd_0.01-w_20K-b1_0.9-b2_0.95-p_amp_bf16-l_1.0-pmpr_br_0.0625_tr_0.4_l_0.1-ms_123K-rope_dp-dino_c_5_l_0.5/checkpoints"
+    # Ablations on 50M
+    "/weka/oe-training-default/georges/checkpoints/ViT_B_16/ablations/DataComp50M_MetaclipBased/logs/50M_Abl_SL_lr_0.001-wd_0.01-w_20K-b1_0.9-b2_0.95-p_amp_bf16-l_1.0-ms_123K-rope_dp/checkpoints"
+    "/weka/oe-training-default/georges/checkpoints/ViT_B_16/ablations/DataComp50M_MetaclipBased/logs/50M_Abl_2_lr_0.001-wd_0.01-w_20K-b1_0.9-b2_0.95-p_amp_bf16-l_1.0-ms_123K-rope_dp/checkpoints"
+    "/weka/oe-training-default/georges/checkpoints/ViT_B_16/ablations/DataComp50M_MetaclipBased/logs/50M_Abl_lr0p001-wd0p01-w20K-b10p9-b20p95-pamp_bf16-l1p0-ms123K-rope_dp-dino_c2_l0p5/checkpoints"
+    "/weka/oe-training-default/georges/checkpoints/ViT_B_16/ablations/DataComp50M_MetaclipBased/logs/50M_Abl_lr0p001-wd0p01-w20K-b10p9-b20p95-bs_4p1K-pamp_bf16-l1p0-ms123K-rope_dp-dino_c2_l1p0/checkpoints"
+    
     # "metaclip_400m"
 )
 EXPERIMENT_NAMES=(
@@ -54,7 +59,12 @@ EXPERIMENT_NAMES=(
     # "vitb16_datacomp100m_lr0p001_wd0p0001_warmup20K_ms61K"
     # "vitb16_datacomp100m_lr0p005_wd0p0001_warmup20K_ms30p5K_maskreg"
     # "vit_b16_metaclip400m"
-    "50M_Abl_lr_0.001-wd_0.01-w_20K-b1_0.9-b2_0.95-p_amp_bf16-l_1.0-pmpr_br_0.0625_tr_0.4_l_0.1-ms_123K-rope_dp-dino_c_5_l_0.5"
+    # Ablations on 50M
+    "50M_Abl_SL_lr_0.001-wd_0.01-w_20K-b1_0.9-b2_0.95-p_amp_bf16-l_1.0-ms_123K-rope_dp"
+    "50M_Abl_2_lr_0.001-wd_0.01-w_20K-b1_0.9-b2_0.95-p_amp_bf16-l_1.0-ms_123K-rope_dp"
+    "50M_Abl_lr0p001-wd0p01-w20K-b10p9-b20p95-pamp_bf16-l1p0-ms123K-rope_dp-dino_c2_l0p5"
+    "50M_Abl_lr0p001-wd0p01-w20K-b10p9-b20p95-bs_4p1K-pamp_bf16-l1p0-ms123K-rope_dp-dino_c2_l1p0"
+    
 )
 
 if (( ${#MODELS_TO_RUN[@]} != ${#EXPERIMENT_NAMES[@]} )); then

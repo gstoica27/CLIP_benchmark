@@ -186,9 +186,9 @@ def main_eval(base):
     for (model, pretrained), (dataset), (language) in runs:
         # Skip some datasets
         # if any([name in dataset for name in ["diabetic_retinopathy", "oxford_iiit_pet", "pets", "resisc45", "sun397"]]):
-        # if any([name in dataset for name in ["diabetic_retinopathy"]]):
-        #     print("Skipping", dataset)
-        #     continue
+        if any([name in dataset for name in ["sun397"]]):
+            print("Skipping", dataset)
+            continue
         # We iterative over all possible model/dataset/languages
         args = copy(base)
         args.model = model
