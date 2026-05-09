@@ -2,9 +2,28 @@ import os
 import pdb
 import torch
 import sys
-sys.path.append(
-    '/weka/prior-default/georges/research/open_clip/src'
+
+# Force the local user open_clip checkout (which has drop_in_replacements / RoPE / FSDP-aware
+# extras) ahead of any pip-installed open_clip_torch in site-packages. Must run BEFORE the
+# `from open_clip import drop_in_replacements` line below.
+# Force the local open_clip checkout (which has drop_in_replacements / RoPE / FSDP-aware
+# extras) ahead of any pip-installed open_clip_torch in site-packages. The path is
+# computed relative to this file:
+#   <repo>/CLIP_benchmark/clip_benchmark/models/open_clip.py  →  <repo>/src
+# so it works for any clone location. Override with $OPEN_CLIP_SRC if you keep the
+# open_clip source somewhere else.
+_DEFAULT_SRC = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "src")
 )
+_USER_OPEN_CLIP_SRC = os.environ.get("OPEN_CLIP_SRC", _DEFAULT_SRC)
+while _USER_OPEN_CLIP_SRC in sys.path:
+    sys.path.remove(_USER_OPEN_CLIP_SRC)
+sys.path.insert(0, _USER_OPEN_CLIP_SRC)
+# If a stale `open_clip` was already imported (e.g. from site-packages), drop it so the next
+# import resolves against the user's source.
+for _mod in list(sys.modules):
+    if _mod == "open_clip" or _mod.startswith("open_clip."):
+        del sys.modules[_mod]
 import open_clip
 import torch.distributed.checkpoint as dist_cp
 import torch.distributed.checkpoint.state_dict as dist_cp_sd

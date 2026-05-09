@@ -110,10 +110,17 @@ def run_classification(model, classifier, dataloader, device, amp=True):
 
             with torch.autocast(device, enabled=amp):
                 # predict
-                image_features = model.encode_image(images)
-                if isinstance(image_features, dict) and 'x' in image_features:
-                    image_features = image_features['x']
-                # import pdb; pdb.set_trace()
+                image_features = model.encode_image(images, apply_rope=True)
+                if isinstance(image_features, dict):
+                    if 'x' in image_features:
+                        image_features = image_features['x']
+                    elif 'image_latent' in image_features:
+                        image_features = image_features['image_latent']
+                    else:
+                        raise KeyError(
+                            f"encode_image returned a dict without 'x' or 'image_latent': "
+                            f"keys={list(image_features.keys())}"
+                        )
                 image_features = F.normalize(image_features, dim=-1)
                 logits = 100. * image_features @ classifier
             

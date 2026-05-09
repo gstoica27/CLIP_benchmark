@@ -184,9 +184,11 @@ def main_eval(base):
         random.shuffle(runs)
         runs = [r for i, r in enumerate(runs) if i % world_size == rank]
     for (model, pretrained), (dataset), (language) in runs:
-        # Skip some datasets
-        # if any([name in dataset for name in ["diabetic_retinopathy", "oxford_iiit_pet", "pets", "resisc45", "sun397"]]):
-        if any([name in dataset for name in ["sun397"]]):
+        # Skip datasets that are unavailable / version-mismatched in this dataset_root.
+        # - sun397: not in our local dataset_root.
+        # - oxford_iiit_pet/pets: tfds asks for v3.*.* but only v4.0.0 is on disk.
+        # - resisc45: requires tfds remote download (not bundled in dataset_root).
+        if any([name in dataset for name in ["sun397", "pets", "oxford_iiit_pet", "resisc45"]]):
             print("Skipping", dataset)
             continue
         # We iterative over all possible model/dataset/languages
@@ -265,7 +267,14 @@ def run(args):
         import yaml
         import sys
         import numpy as np
-        sys.path.append("/weka/prior-default/georges/research/open_clip/src")
+        # Match the open_clip src path strategy used in clip_benchmark/models/open_clip.py.
+        # Compute relative to this file (cli_rope.py lives at
+        # <repo>/CLIP_benchmark/clip_benchmark/cli_rope.py → <repo>/src), allow override
+        # via $OPEN_CLIP_SRC.
+        _DEFAULT_SRC = os.path.normpath(
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "src")
+        )
+        sys.path.insert(0, os.environ.get("OPEN_CLIP_SRC", _DEFAULT_SRC))
         from open_clip import drop_in_replacements, create_model_and_transforms, get_tokenizer
         # from open_clip_train import create_model_and_transforms
         # pdb.set_trace()

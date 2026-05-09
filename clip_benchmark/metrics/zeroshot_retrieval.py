@@ -66,18 +66,24 @@ def evaluate(model, dataloader, tokenizer,  device, amp=True, recall_k_list=[1, 
 
         # compute the embedding of images and texts
         if model_params is not None:
-            # pdb.set_trace()
             autocast = get_autocast(model_params['precision'], device_type=device)
-            with torch.no_grad(), autocast():
-                # pdb.set_trace()
-                batch_images_emb = F.normalize(model.encode_image(batch_images, apply_rope=True)['x'], dim=-1)
-                batch_texts_emb = F.normalize(model.encode_text(batch_texts_tok), dim=-1)
+            ctx = autocast()
         else:
-            with torch.no_grad(), torch.autocast(device, enabled=amp):
-                # pdb.set_trace()
-                batch_images_emb = F.normalize(model.encode_image(batch_images, apply_rope=True)['x'], dim=-1)
-                # batch_images_emb = F.normalize(model.encode_image(batch_images), dim=-1)
-                batch_texts_emb = F.normalize(model.encode_text(batch_texts_tok), dim=-1)
+            ctx = torch.autocast(device, enabled=amp)
+        with torch.no_grad(), ctx:
+            img_out = model.encode_image(batch_images, apply_rope=True)
+            if isinstance(img_out, dict):
+                if 'x' in img_out:
+                    img_out = img_out['x']
+                elif 'image_latent' in img_out:
+                    img_out = img_out['image_latent']
+                else:
+                    raise KeyError(
+                        f"encode_image returned a dict without 'x' or 'image_latent': "
+                        f"keys={list(img_out.keys())}"
+                    )
+            batch_images_emb = F.normalize(img_out, dim=-1)
+            batch_texts_emb = F.normalize(model.encode_text(batch_texts_tok), dim=-1)
 
         batch_images_emb_list.append(batch_images_emb.cpu())
         batch_texts_emb_list.append(batch_texts_emb.cpu())

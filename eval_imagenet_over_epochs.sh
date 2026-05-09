@@ -1,28 +1,23 @@
 #!/bin/bash
-# Loop zeroshot classification on the canonical VTAB-1k collection (16 of 19 datasets;
-# pets / oxford_iiit_pet / resisc45 / sun397 are skipped inside cli_rope due to
-# data availability) over every (model, epoch) in MODEL_SPECS.
+# Loop zeroshot classification on ImageNet-1k val (50K images, 1000 classes)
+# over every (model, epoch) in MODEL_SPECS.
 #
 # Required env vars:
 #   CHECKPOINT_ROOT  dir with <model_dir>/checkpoints/epoch_<N>/  +  <model_dir>/params.txt
-#   DATASET_ROOT     clip_benchmark dataset_root
+#   IMAGENET_ROOT    dir with val/<wnid>/*.JPEG  +  ILSVRC2012_devkit_t12.tar.gz
 # Optional:
 #   RESULTS_ROOT     where to write JSON outputs (default: <CLIP_benchmark>/results)
 #   CUDA_VISIBLE_DEVICES  single-GPU index (default: 0)
-#
-# Edit MODEL_SPECS below. Format: "tag|model_dir|model_arch|epoch_list"
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${SCRIPT_DIR}"
 
 : "${CHECKPOINT_ROOT:?must set CHECKPOINT_ROOT (dir of <model>/checkpoints/epoch_*/)}"
-: "${DATASET_ROOT:?must set DATASET_ROOT (clip_benchmark dataset_root)}"
+: "${IMAGENET_ROOT:?must set IMAGENET_ROOT (dir with val/ + ILSVRC2012_devkit_t12.tar.gz)}"
 RESULTS_ROOT="${RESULTS_ROOT:-${SCRIPT_DIR}/results}"
 
 declare -a MODEL_SPECS=(
     # "tag|model_dir|model_arch|epoch_list"
-    # Example:
-    # "400mv2|400Mv2_lr0p001-...-rope_dp|ViT-B-16-SigLIP|49"
 )
 
 if [ "${#MODEL_SPECS[@]}" -eq 0 ]; then
@@ -36,15 +31,17 @@ for spec in "${MODEL_SPECS[@]}"; do
     for epoch in $epochs; do
         pretrained_path="${pretrained_dir}/epoch_${epoch}"
         output_pattern="${RESULTS_ROOT}/${model_name}/epoch_${epoch}/{dataset}_{model}_{language}_{task}.json"
-        echo "=== ${tag} epoch_${epoch} (vtab) ==="
+        echo "=== ${tag} epoch_${epoch} imagenet1k ==="
         CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-0} python -m clip_benchmark.cli_rope eval \
             --model_type open_clip \
             --model "$model_arch" \
             --pretrained "$pretrained_path" \
             --task zeroshot_classification \
-            --dataset_root "$DATASET_ROOT" \
-            --dataset vtab \
+            --dataset_root "$IMAGENET_ROOT" \
+            --dataset imagenet1k \
             --output "$output_pattern" \
+            --batch_size 128 \
+            --language en \
             --is-fsdp \
             --skip_existing
     done

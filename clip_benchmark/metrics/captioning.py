@@ -1,17 +1,11 @@
 import json
 import sys
-sys.path.insert(0, "/weka/prior-default/georges/research/open_clip/src/")
-from open_clip import tokenize
 from tqdm.auto import tqdm
-from open_clip.tokenizer import _tokenizer
 
-
-from pycocoevalcap.tokenizer.ptbtokenizer import PTBTokenizer
-from pycocoevalcap.bleu.bleu import Bleu
-from pycocoevalcap.meteor.meteor import Meteor
-from pycocoevalcap.rouge.rouge import Rouge
-from pycocoevalcap.cider.cider import Cider
-from pycocoevalcap.spice.spice import Spice
+# NOTE: open_clip and pycocoevalcap are imported lazily inside the functions that
+# need them so that simply importing this module (e.g. via cli_rope.py's
+# `from clip_benchmark.metrics import captioning`) does not require pycocoevalcap
+# or pin a specific open_clip checkout to sys.path.
 
 
 """
@@ -25,6 +19,12 @@ class COCOEvalCap:
         self.imgToEval = {}
         self.results = results
     def evaluate(self):
+        from pycocoevalcap.tokenizer.ptbtokenizer import PTBTokenizer
+        from pycocoevalcap.bleu.bleu import Bleu
+        from pycocoevalcap.meteor.meteor import Meteor
+        from pycocoevalcap.rouge.rouge import Rouge
+        from pycocoevalcap.cider.cider import Cider
+        from pycocoevalcap.spice.spice import Spice
         gts = {}
         res = {}
         for imgId, r in enumerate(self.results):
@@ -81,6 +81,7 @@ class COCOEvalCap:
         self.evalImgs = [eval for imgId, eval in self.imgToEval.items()]
 
 def evaluate(model, dataloader, batch_size, device, transform, train_dataloader=None, num_workers=None, amp=True, verbose=False):
+    from open_clip.tokenizer import _tokenizer
     results = []
     image_id = 0
     gt = []
