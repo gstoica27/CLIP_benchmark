@@ -27,13 +27,16 @@
 #   BEAKER_HOME      $HOME inside the container    (default: $HOME on this machine)
 #   CONDA_ENV        conda env name                (default: trainer)
 #   WORKSPACE        gantry workspace              (default: ai2/oe-encoder)
-#   BUDGET           gantry budget                 (default: ai2/oe-mm)
+#   BUDGET           gantry budget                 (default: ai2/oe-omai)
 #   PRIORITY         gantry priority               (default: high)
 #   BEAKER_IMAGE     gantry beaker image           (default: sanghol/molmo2-torch2.7.1-cuda12.8)
 #
-# Flags:
-#   --status         dry-run; print what *would* be submitted, fire nothing
-#   --force          ignore existing JSONs; submit jobs for every (model, task)
+# Flags (mutually exclusive in spirit; --force also valid with default submit mode):
+#   (no flag)        submit beaker jobs for every (model, task) whose JSON is missing
+#   --status         print a results table (latest epoch per model + the metric
+#                    numbers extracted from existing JSONs); no submissions
+#   --dry-run        like default but only print what would be submitted, fire nothing
+#   --force          submit every job regardless of existing JSONs
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLIP_BENCH_DIR="$(dirname "${SCRIPT_DIR}")"
@@ -46,18 +49,20 @@ RESULTS_ROOT="${RESULTS_ROOT:-${CLIP_BENCH_DIR}/results}"
 OPEN_CLIP_REPO="${OPEN_CLIP_REPO:-${DEFAULT_REPO}}"
 BEAKER_HOME="${BEAKER_HOME:-${HOME}}"
 CONDA_ENV="${CONDA_ENV:-trainer}"
-WORKSPACE="${WORKSPACE:-ai2/oe-encoder}"
-BUDGET="${BUDGET:-ai2/oe-mm}"
+WORKSPACE="${WORKSPACE:-ai2/oe-encoder-data}"
+BUDGET="${BUDGET:-ai2/oe-omai}"
 PRIORITY="${PRIORITY:-high}"
 BEAKER_IMAGE="${BEAKER_IMAGE:-sanghol/molmo2-torch2.7.1-cuda12.8}"
 
 # Flags
+STATUS_MODE=false
 DRY_RUN=false
 FORCE=false
 for arg in "$@"; do
     case "$arg" in
-        --status) DRY_RUN=true ;;
-        --force)  FORCE=true ;;
+        --status)  STATUS_MODE=true ;;
+        --dry-run) DRY_RUN=true ;;
+        --force)   FORCE=true ;;
         *) echo "Unknown arg: $arg" >&2; exit 1 ;;
     esac
 done
@@ -101,10 +106,10 @@ submit_retrieval() {
     local output_pattern="${out_dir}/{dataset}_{model}_{language}_{task}.json"
 
     if [ "$DRY_RUN" == "true" ]; then
-        echo "  [DRY-RUN] would submit retrieval for ${model_name} epoch_${epoch} (arch=${model_arch}) → ${job_name}"
+        echo "  [dry-run] would submit retrieval for ${model_name} epoch_${epoch} (arch=${model_arch}) → ${job_name}"
         return 0
     fi
-    echo "  [submit retrieval] ${model_name} epoch_${epoch} → ${job_name}"
+    echo "  [submit retr]    ${model_name} epoch_${epoch} → ${job_name}"
     gantry run --allow-dirty \
         --task-name "$job_name" --name "$job_name" \
         --workspace "$WORKSPACE" \
@@ -149,10 +154,10 @@ submit_imagenet() {
     local output_pattern="${out_dir}/{dataset}_{model}_{language}_{task}.json"
 
     if [ "$DRY_RUN" == "true" ]; then
-        echo "  [DRY-RUN] would submit imagenet for ${model_name} epoch_${epoch} (arch=${model_arch}) → ${job_name}"
+        echo "  [dry-run] would submit imagenet for ${model_name} epoch_${epoch} (arch=${model_arch}) → ${job_name}"
         return 0
     fi
-    echo "  [submit imagenet]  ${model_name} epoch_${epoch} → ${job_name}"
+    echo "  [submit in1k]    ${model_name} epoch_${epoch} → ${job_name}"
     gantry run --allow-dirty \
         --task-name "$job_name" --name "$job_name" \
         --workspace "$WORKSPACE" \
@@ -180,6 +185,78 @@ submit_imagenet() {
                 --is-fsdp \
                 --skip_existing"
 }
+
+# ---- --status: print results table and exit ----
+if [ "$STATUS_MODE" == "true" ]; then
+    CHECKPOINT_ROOT="$CHECKPOINT_ROOT" RESULTS_ROOT="$RESULTS_ROOT" \
+    python3 - <<'PYEOF'
+import json, os, re
+
+CKPT = os.environ["CHECKPOINT_ROOT"]
+RES  = os.environ["RESULTS_ROOT"]
+EP_RE = re.compile(r'^epoch_(\d+)$')
+
+def latest_epoch(model_dir):
+    cps = os.path.join(model_dir, "checkpoints")
+    if not os.path.isdir(cps): return None
+    epochs = [int(m.group(1)) for f in os.listdir(cps) for m in [EP_RE.match(f)] if m]
+    return max(epochs) if epochs else None
+
+def read_arch(model_dir):
+    pt = os.path.join(model_dir, "params.txt")
+    if not os.path.isfile(pt): return None
+    with open(pt) as f:
+        for line in f:
+            if line.startswith("model:"):
+                return line.split(":", 1)[1].strip()
+    return None
+
+def load(path):
+    if not os.path.isfile(path): return None
+    try:
+        with open(path) as f: return json.load(f)
+    except Exception: return None
+
+rows = []
+for name in sorted(os.listdir(CKPT)):
+    md = os.path.join(CKPT, name)
+    if not os.path.isdir(md): continue
+    ep = latest_epoch(md)
+    arch = read_arch(md)
+    if ep is None or arch is None:
+        rows.append((name, ep, arch, None, None, None, None, None))
+        continue
+    base = os.path.join(RES, name, f"epoch_{ep}")
+    fl  = load(os.path.join(base, f"flickr30k_{arch}_en_zeroshot_retrieval.json"))
+    ms  = load(os.path.join(base, f"mscoco_captions_{arch}_en_zeroshot_retrieval.json"))
+    im  = load(os.path.join(base, f"imagenet1k_{arch}_en_zeroshot_classification.json"))
+    fl_i = fl["metrics"]["image_retrieval_recall@1"] if fl else None
+    fl_t = fl["metrics"]["text_retrieval_recall@1"]  if fl else None
+    ms_i = ms["metrics"]["image_retrieval_recall@1"] if ms else None
+    ms_t = ms["metrics"]["text_retrieval_recall@1"]  if ms else None
+    in1k = (im["metrics"].get("acc1") or im["metrics"].get("acc")) if im else None
+    rows.append((name, ep, arch, fl_i, fl_t, ms_i, ms_t, in1k))
+
+# Table
+def fmt(v): return f"{v:.3f}" if isinstance(v, float) else "—"
+name_w = max((len(r[0]) for r in rows), default=10)
+name_w = min(name_w, 60)
+hdr = f"{'model':<{name_w}}  {'epoch':>5}  {'fl I@1':>6}  {'fl T@1':>6}  {'ms I@1':>6}  {'ms T@1':>6}  {'in1k':>6}"
+print(hdr)
+print("-" * len(hdr))
+for name, ep, arch, fl_i, fl_t, ms_i, ms_t, in1k in rows:
+    short = name if len(name) <= name_w else name[:name_w-1] + "…"
+    ep_s  = str(ep) if ep is not None else "—"
+    print(f"{short:<{name_w}}  {ep_s:>5}  {fmt(fl_i):>6}  {fmt(fl_t):>6}  {fmt(ms_i):>6}  {fmt(ms_t):>6}  {fmt(in1k):>6}")
+
+# Mark missing
+n_total = len(rows)
+n_full  = sum(1 for r in rows if all(v is not None for v in r[3:]))
+print()
+print(f"summary: {n_full}/{n_total} model(s) have all three eval results")
+PYEOF
+    exit 0
+fi
 
 # ---- main loop ----
 echo "scanning $CHECKPOINT_ROOT for models..."
@@ -216,4 +293,9 @@ echo
 echo "summary: ${n_models} model(s) scanned; ${n_skip_retr} retrieval already-done, ${n_skip_in1k} imagenet already-done"
 [ "$n_no_epoch" -gt 0 ] && echo "  ${n_no_epoch} model(s) skipped: no checkpoints/epoch_N/"
 [ "$n_no_arch"  -gt 0 ] && echo "  ${n_no_arch} model(s) skipped: no model: in params.txt"
-[ "$DRY_RUN" == "true" ] && echo "(dry run — nothing was submitted)"
+[ "$DRY_RUN" == "true" ] && echo "(--dry-run — nothing was submitted)"
+
+
+
+
+# CHECKPOINT_ROOT=/weka/prior-default/chenhaoz/home/open_clip/important_ckpt DATASET_ROOT=/weka/oe-training-default/georges/datasets/clip_benchmark IMAGENET_ROOT=/weka/prior-default/georges/datasets/imagenet1k/imagenet bash ../open_clip/CLIP_benchmark/submit_jobs/auto_submit_retrieval_imagenet.sh
