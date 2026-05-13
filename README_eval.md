@@ -239,6 +239,32 @@ under a different weka path than your home, override `OPEN_CLIP_REPO`.
 
 ---
 
+### Auto-scanning every model in `$CHECKPOINT_ROOT`
+
+If you keep all your checkpoints under one root and just want "eval every model
+at its latest epoch, skip whatever is already done", use the auto-scanner:
+
+```bash
+CHECKPOINT_ROOT=/path/to/your/checkpoints \
+DATASET_ROOT=/weka/oe-training-default/georges/datasets/clip_benchmark \
+IMAGENET_ROOT=/weka/prior-default/georges/datasets/imagenet1k/imagenet \
+bash CLIP_benchmark/submit_jobs/auto_submit_retrieval_imagenet.sh
+```
+
+For each `<model_dir>` under `$CHECKPOINT_ROOT` it:
+
+1. Picks the highest-numbered `checkpoints/epoch_N/`
+2. Reads the architecture from `<model_dir>/params.txt` (`model:` line)
+3. Submits 1 Beaker job for retrieval (mscoco_captions + flickr30k) and 1 for
+   imagenet1k — **only if** the expected output JSON(s) are missing under
+   `$RESULTS_ROOT/<model_dir>/epoch_N/`
+
+Flags:
+- `--status` → dry-run, prints what would be submitted, fires nothing
+- `--force`  → ignore existing JSONs; submit every job
+
+Re-fire any time; it's idempotent.
+
 ## 5. Aggregating results
 
 After the JSON files land under `$RESULTS_ROOT`, fold them into a single CSV:
