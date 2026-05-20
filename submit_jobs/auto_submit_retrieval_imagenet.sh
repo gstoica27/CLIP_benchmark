@@ -16,10 +16,14 @@
 #   │       └── epoch_<N>/                (the highest N → "latest")
 #   └── ...
 #
-# Required env vars:
+# Required env vars (the defaults match chenhaoz's interactive layout; override
+# via env if you keep your data elsewhere):
 #   CHECKPOINT_ROOT  parent dir holding all model dirs
+#                      default: /weka/prior-default/chenhaoz/home/open_clip/important_ckpt
 #   DATASET_ROOT     clip_benchmark dataset_root (must contain flickr30k/, val2014/, …)
+#                      default: /weka/oe-training-default/georges/datasets/clip_benchmark
 #   IMAGENET_ROOT    imagenet val dir (val/ + ILSVRC2012_devkit_t12.tar.gz)
+#                      default: /weka/prior-default/georges/datasets/imagenet1k/imagenet
 # Optional:
 #   RESULTS_ROOT     where to write JSON outputs   (default: <CLIP_benchmark>/results)
 #   OPEN_CLIP_REPO   absolute path to the cloned open_clip repo for beaker `cd`
@@ -42,9 +46,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLIP_BENCH_DIR="$(dirname "${SCRIPT_DIR}")"
 DEFAULT_REPO="$(dirname "${CLIP_BENCH_DIR}")"
 
-: "${CHECKPOINT_ROOT:?must set CHECKPOINT_ROOT}"
-: "${DATASET_ROOT:?must set DATASET_ROOT (clip_benchmark dataset_root for retrieval)}"
-: "${IMAGENET_ROOT:?must set IMAGENET_ROOT (imagenet val + devkit)}"
+CHECKPOINT_ROOT="${CHECKPOINT_ROOT:-/weka/prior-default/chenhaoz/home/open_clip/important_ckpt}"
+DATASET_ROOT="${DATASET_ROOT:-/weka/oe-training-default/georges/datasets/clip_benchmark}"
+IMAGENET_ROOT="${IMAGENET_ROOT:-/weka/prior-default/georges/datasets/imagenet1k/imagenet}"
 RESULTS_ROOT="${RESULTS_ROOT:-${CLIP_BENCH_DIR}/results}"
 OPEN_CLIP_REPO="${OPEN_CLIP_REPO:-${DEFAULT_REPO}}"
 BEAKER_HOME="${BEAKER_HOME:-${HOME}}"
@@ -219,6 +223,7 @@ def load(path):
 
 rows = []
 for name in sorted(os.listdir(CKPT)):
+    if name.startswith("__"): continue  # excluded by convention (e.g. reference results)
     md = os.path.join(CKPT, name)
     if not os.path.isdir(md): continue
     ep = latest_epoch(md)
@@ -261,8 +266,14 @@ fi
 # ---- main loop ----
 echo "scanning $CHECKPOINT_ROOT for models..."
 n_models=0; n_skip_retr=0; n_skip_in1k=0; n_no_epoch=0; n_no_arch=0
+# Skip model dirs whose names start with "__" (convention for non-checkpoint
+# results dirs that live alongside real checkpoints, e.g. the SigLIP2 reference).
 for model_dir in "$CHECKPOINT_ROOT"/*/; do
     model_name="$(basename "${model_dir%/}")"
+    if [[ "$model_name" == __* ]]; then
+        echo "[skip] $model_name : '__'-prefixed dirs are excluded by convention"
+        continue
+    fi
     epoch=$(find_latest_epoch "${model_dir%/}")
     if [ -z "$epoch" ]; then
         echo "[skip] $model_name : no epoch_N/ under checkpoints/" >&2
