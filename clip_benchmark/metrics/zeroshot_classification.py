@@ -79,7 +79,7 @@ def accuracy(output, target, topk=(1,)):
     pred = output.topk(max(topk), 1, True, True)[1].t()
     correct = pred.eq(target.view(1, -1).expand_as(pred))
     n = len(target)
-    return [float(correct[:k].reshape(-1).float().sum(0, keepdim=True).cpu().numpy()) / n for k in topk]
+    return [float(correct[:k].reshape(-1).float().sum(0, keepdim=True).cpu().item()) / n for k in topk]
 
 
 def run_classification(model, classifier, dataloader, device, amp=True):
@@ -109,8 +109,11 @@ def run_classification(model, classifier, dataloader, device, amp=True):
             target = target.to(device)
 
             with torch.autocast(device, enabled=amp):
-                # predict
-                image_features = model.encode_image(images, apply_rope=True)
+                # predict (rope models = coca/dinov3 take apply_rope; siglip2 etc. do not)
+                try:
+                    image_features = model.encode_image(images, apply_rope=True)
+                except TypeError:
+                    image_features = model.encode_image(images)
                 if isinstance(image_features, dict):
                     if 'x' in image_features:
                         image_features = image_features['x']
